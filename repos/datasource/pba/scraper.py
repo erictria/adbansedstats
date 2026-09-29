@@ -1,89 +1,25 @@
-from io import StringIO
+"""HTTP box-score export. Uses the same parser as the ingestion adapter."""
+import argparse
+from dataclasses import asdict
+import json
 from pathlib import Path
+import sys
 
-import pandas as pd
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-
-
-URL = (
-    "https://stats-api-01.pba.ph/tournaments/"
-    "pba-season-49-governors-cup?game_id=3"
-)
+# Allow direct execution from this repository without installing the package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'ingestion' / 'src'))
+from ingestion.sources.pba import fetch_html, parse_box_score
 
 
-def scrape_box_score(url: str) -> list[pd.DataFrame]:
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/150.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1440, "height": 1000},
-        )
-
-        page = context.new_page()
-        page.set_default_timeout(30_000)
-
-        response = page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=60_000,
-        )
-
-        if response is not None:
-            print("HTTP status:", response.status)
-
-        print("Page title:", page.title())
-
-        try:
-            # Wait for the page's JavaScript to render a table.
-            page.wait_for_selector(
-                "table",
-                state="attached",
-                timeout=30_000,
-            )
-        except PlaywrightTimeoutError:
-            # Save debugging information before failing.
-            page.screenshot(
-                path="pba_debug.png",
-                full_page=True,
-            )
-
-            Path("pba_debug.html").write_text(
-                page.content(),
-                encoding="utf-8",
-            )
-
-            raise RuntimeError(
-                "The page loaded, but no table appeared. "
-                "Check pba_debug.png and pba_debug.html."
-            )
-
-        html = page.content()
-
-        Path("pba_game_3.html").write_text(
-            html,
-            encoding="utf-8",
-        )
-
-        browser.close()
-
-    return pd.read_html(StringIO(html))
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--tournament', default='pba-50th-season-governors-cup')
+    parser.add_argument('--game-id', type=int, default=522)
+    parser.add_argument('--output', type=Path, default=Path('pba_box_score.json'))
+    args = parser.parse_args()
+    records = parse_box_score(fetch_html(args.tournament, args.game_id), args.tournament, args.game_id)
+    args.output.write_text(json.dumps([asdict(r) for r in records], indent=2, ensure_ascii=False), encoding='utf-8')
+    print(f'Exported {len(records)} player/team records to {args.output}')
 
 
-if __name__ == "__main__":
-    tables = scrape_box_score(URL)
-
-    print(f"Found {len(tables)} tables")
-
-    for index, dataframe in enumerate(tables):
-        print(f"\nTable {index}")
-        print(dataframe.head())
-
-        dataframe.to_csv(
-            f"pba_game_3_table_{index}.csv",
-            index=False,
-        )
+if __name__ == '__main__':
+    main()

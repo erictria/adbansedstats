@@ -1,0 +1,4 @@
+[
+  {"entity": "team", "external_id": "demo-team", "payload": {"name": " Harbor Waves ", "league": "Demo Philippines Basketball"}},
+  {"entity": "player", "external_id": "demo-player", "payload": {"name": " Alex Reyes ", "team_id": "demo-team", "number": 7}}
+]
