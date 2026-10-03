@@ -1,5 +1,10 @@
 import json
 import sqlite3
+from contextlib import contextmanager
+from importlib.resources import files
+from uuid import UUID
+
+from .domain_storage import DomainStore
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,10 +32,45 @@ CREATE TABLE IF NOT EXISTS records (
 """
 
 
-class SQLiteStore:
+class SQLiteConnection:
+    """Bind domain values to SQLite's scalar types without global adapters."""
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, params=()):
+        values = []
+        for value in params:
+            if isinstance(value, UUID):
+                value = str(value)
+            elif isinstance(value, datetime):
+                value = value.isoformat()
+            elif isinstance(value, list):
+                value = json.dumps(value)
+            values.append(value)
+        return self.connection.execute(sql, values)
+
+
+class SQLiteStore(DomainStore):
     """Latest raw and clean values per source/entity/ID, with successful-run history."""
     def __init__(self, path: Path):
         self.path = path
+
+    @contextmanager
+    def transaction(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.path)
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.executescript(files('ingestion').joinpath('sql/sqlite_initial.sql').read_text())
+            with connection:
+                connection.execute("BEGIN")
+                yield SQLiteConnection(connection)
+        finally:
+            connection.close()
+
+    def initialize(self):
+        with self.transaction():
+            pass
 
     def write_batch(
         self, source: str, run_id: str, started_at: str,

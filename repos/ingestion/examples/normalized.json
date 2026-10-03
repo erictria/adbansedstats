@@ -1,0 +1,49 @@
+{
+  "teams": [
+    {
+      "team_id": "00000000-0000-4000-8000-000000000001",
+      "team_name": "Demo Waves",
+      "external_id": "demo-waves"
+    },
+    {
+      "team_id": "00000000-0000-4000-8000-000000000002",
+      "team_name": "Demo Falcons",
+      "external_id": "demo-falcons"
+    }
+  ],
+  "players": [
+    {
+      "player_id": "00000000-0000-4000-8000-000000000003",
+      "player_name": "Alex Reyes",
+      "player_short_name": "A. Reyes",
+      "external_id": "demo-alex"
+    }
+  ],
+  "games": [
+    {
+      "game_id": "00000000-0000-4000-8000-000000000004",
+      "team_id_1": "00000000-0000-4000-8000-000000000001",
+      "team_id_2": "00000000-0000-4000-8000-000000000002",
+      "external_id": "demo-game",
+      "tournament": "demo",
+      "team_1_score": 90,
+      "team_2_score": 85,
+      "team_1_period_scores": [
+        20,
+        25,
+        25,
+        20
+      ]
+    }
+  ],
+  "game_statistics": [
+    {
+      "game_id": "00000000-0000-4000-8000-000000000004",
+      "player_id": "00000000-0000-4000-8000-000000000003",
+      "team_id": "00000000-0000-4000-8000-000000000001",
+      "points": 20,
+      "rebounds": 5,
+      "assists": 4
+    }
+  ]
+}
