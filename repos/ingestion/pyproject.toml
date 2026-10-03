@@ -7,10 +7,13 @@ name = "adbansedstats-ingestion"
 version = "0.1.0"
 description = "Pluggable retrieval, cleaning, and storage for league statistics"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["pydantic>=2,<3", "duckdb>=1.4,<2"]
 
 [project.scripts]
 league-ingest = "ingestion.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+ingestion = ["sql/*.sql"]

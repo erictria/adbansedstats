@@ -1,7 +1,7 @@
 # League ingestion engine
 
 Python 3.10+ scaffold for retrieving league data, cleaning records, and persisting
-it. Uses only the Python standard library at runtime. SQLite is the initial
+it. Domain schemas use Pydantic v2. SQLite is the initial
 storage implementation; sources and storage can be replaced independently.
 No live API or scraper is connected yet.
 
@@ -140,3 +140,81 @@ Use `--pba` for typed PBA cleaning; generic `--input` uses the default cleaner.
 Only game 522 has been verified live. Schedule discovery, polling, retries,
 play-by-play ingestion, and cross-game player identity matching are not implemented.
 HTML changes or access challenges fail the run instead of importing partial data.
+
+### Discover published games
+
+```sh
+PYTHONPATH=src python3 -m ingestion --list-games \
+  --tournament pba-50th-season-governors-cup
+```
+
+Returns JSON with game IDs, canonical URLs, status text, and team codes without
+writing to the database. It follows `a.schedule-box` links for the selected
+tournament, deduplicates IDs, and preserves page order. Do not assume IDs are
+consecutive. The inspected page listed 50 Final games; this is the published page
+list, not a guarantee of complete historical coverage. No pagination was visible.
+
+To ingest the listed completed games programmatically:
+
+```python
+import time
+from pathlib import Path
+from ingestion.sources.pba import discover_games, PbaSource
+from ingestion.pba_cleaning import PbaCleaner
+from ingestion.engine import IngestionEngine
+from ingestion.storage import SQLiteStore
+
+tournament = 'pba-50th-season-governors-cup'
+engine = IngestionEngine(PbaCleaner(), SQLiteStore(Path('data/league.sqlite3')))
+for game in discover_games(tournament):
+    if game.status.casefold() != 'final':
+        continue
+    engine.run(PbaSource(tournament, game.game_id))
+    time.sleep(1)
+```
+
+Each game commits separately. An error stops this example, retaining previously
+completed games; rerunning updates those records. Discovery itself does not fetch
+the individual games.
+
+
+## Player schema
+
+Install the project (`python -m pip install -e .`) to include Pydantic v2.
+
+```python
+from ingestion.schemas import Player
+
+player = Player(
+    player_name="Rhon Jay Abarrientos",
+    player_short_name="R. Abarrientos",
+    external_id="150",
+)
+print(player.model_dump_json())
+```
+
+`player_id` defaults to a new UUID. Supply the existing UUID when loading or
+updating a player; this schema does not perform identity matching. All three text
+fields are required, trimmed, and cannot be blank. External IDs remain strings
+to preserve leading zeroes. This defines validation only; a database player table
+and mappings from game stats are not created by this schema.
+
+## Game schemas
+
+`from ingestion.schemas import Game, GameStatistics`
+
+`Game` uses an internal UUID and two team UUID references. Optional metadata covers
+provider game ID, tournament slug, competition name, venue, scheduled datetime,
+original date/time text, status, period, clock, scores, period scores, and source URL.
+Team order follows the source and does not imply home/away. Keep the raw date string
+until its date format and timezone are confirmed.
+
+`GameStatistics` represents one player in a game, with required game/player/team
+UUID references. It includes jersey number, source player name, position, starter
+flag, original minutes text, seconds played, all counting stats, signed plus/minus,
+and flat made/attempted/percentage fields for FG, 2P, 3P, 4P, and FT. Missing stats
+remain null; percentages use 0–100. Intended uniqueness is `(game_id, player_id)`.
+
+These are Pydantic validation schemas, not SQL migrations. Database foreign keys,
+uniqueness, metadata extraction, and mapping the cleaner's nested shooting values
+into these flat fields must be wired in when adding normalized persistence.

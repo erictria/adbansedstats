@@ -36,3 +36,20 @@ class PbaTests(unittest.TestCase):
             records = parse_box_score(fixture().replace(old, new), 'test-cup', 522)
             with self.assertRaises(ValueError):
                 PbaCleaner().clean(records[0])
+
+
+class ScheduleTests(unittest.TestCase):
+    def test_unique_ids_status_and_scope(self):
+        from ingestion.sources.pba import parse_schedule
+        link = '<a class="schedule-box" href="/tournaments/test-cup?game_id=12&amp;x=1"><div class="team">AAA</div><div class="schedule-details">Final</div><div class="team">BBB</div></a>'
+        games = parse_schedule(link + link + link.replace('test-cup', 'other-cup'), 'test-cup')
+        self.assertEqual(len(games), 1)
+        self.assertEqual(games[0].game_id, 12)
+        self.assertEqual(games[0].teams, ['AAA', 'BBB'])
+        self.assertEqual(games[0].status, 'Final')
+
+    def test_empty_or_invalid_schedule_fails(self):
+        from ingestion.sources.pba import parse_schedule
+        for html in ('<html>Blocked</html>', '<a class="schedule-box" href="?game_id=no">Game</a>'):
+            with self.assertRaises(ValueError):
+                parse_schedule(html, 'test-cup')

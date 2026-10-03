@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 import re
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin, urlsplit, parse_qs
 from urllib.request import Request, urlopen
 
 from ..models import RawRecord
@@ -65,8 +65,10 @@ def game_url(tournament: str, game_id: int) -> str:
     return f'{BASE_URL}/tournaments/{tournament}?{urlencode({"game_id": game_id})}'
 
 
-def fetch_html(tournament: str, game_id: int, timeout: float = 30) -> str:
-    url = game_url(tournament, game_id)
+def fetch_html(tournament: str, game_id: int | None = None, timeout: float = 30) -> str:
+    url = game_url(tournament, game_id or 1)
+    if game_id is None:
+        url = url.split('?')[0]
     request = Request(url, headers={'User-Agent': 'AdbansedStats/0.1', 'Accept': 'text/html'})
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -142,3 +144,43 @@ class PbaSource:
 
     def fetch(self):
         return parse_box_score(fetch_html(self.tournament, self.game_id), self.tournament, self.game_id)
+
+
+@dataclass(frozen=True)
+class ScheduledGame:
+    game_id: int
+    url: str
+    status: str
+    teams: list[str]
+
+
+def parse_schedule(html: str, tournament: str) -> list[ScheduledGame]:
+    """Return unique games explicitly linked by the tournament, in page order."""
+    base = game_url(tournament, 1).split('?')[0]
+    expected = urlsplit(base)
+    document = Document()
+    document.feed(html)
+    games = {}
+    for link in document.root.find('a', 'schedule-box'):
+        url = urljoin(base, link.attrs.get('href', ''))
+        parts = urlsplit(url)
+        if parts.netloc != expected.netloc or parts.path != expected.path:
+            continue
+        ids = parse_qs(parts.query).get('game_id', [])
+        if len(ids) != 1 or not ids[0].isdigit() or int(ids[0]) <= 0:
+            raise ValueError('Schedule link has an invalid game ID')
+        game_id = int(ids[0])
+        details = link.find(cls='schedule-details')
+        teams = [team.text() for team in link.find(cls='team')]
+        game = ScheduledGame(game_id, game_url(tournament, game_id),
+                             details[0].text() if details else 'Unknown', teams)
+        if game_id in games and games[game_id] != game:
+            raise ValueError(f'Conflicting schedule entries for game {game_id}')
+        games[game_id] = game
+    if not games:
+        raise ValueError('No schedule games found; tournament may be empty or unavailable')
+    return list(games.values())
+
+
+def discover_games(tournament: str) -> list[ScheduledGame]:
+    return parse_schedule(fetch_html(tournament), tournament)
