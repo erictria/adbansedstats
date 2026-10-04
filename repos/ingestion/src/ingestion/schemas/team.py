@@ -1,9 +1,10 @@
+from .base import DomainModel
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
-class Team(BaseModel):
+class Team(DomainModel):
     """Team identity; reuse team_id when updating an existing team.
 
     external_id is a source-specific identifier, not the team's abbreviation.

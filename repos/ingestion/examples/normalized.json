@@ -33,7 +33,9 @@
         25,
         25,
         20
-      ]
+      ],
+      "tournament_id": "00000000-0000-4000-8000-000000000006",
+      "status": "final"
     }
   ],
   "game_statistics": [
@@ -43,7 +45,65 @@
       "team_id": "00000000-0000-4000-8000-000000000001",
       "points": 20,
       "rebounds": 5,
-      "assists": 4
+      "assists": 4,
+      "participation_status": "played"
+    }
+  ],
+  "leagues": [
+    {
+      "league_id": "00000000-0000-4000-8000-000000000005",
+      "league_name": "Demo League",
+      "abbreviation": "DEMO"
+    }
+  ],
+  "tournaments": [
+    {
+      "tournament_id": "00000000-0000-4000-8000-000000000006",
+      "league_id": "00000000-0000-4000-8000-000000000005",
+      "tournament_name": "Demo Cup",
+      "season": "2026",
+      "slug": "demo"
+    }
+  ],
+  "tournament_teams": [
+    {
+      "tournament_id": "00000000-0000-4000-8000-000000000006",
+      "team_id": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tournament_id": "00000000-0000-4000-8000-000000000006",
+      "team_id": "00000000-0000-4000-8000-000000000002"
+    }
+  ],
+  "roster_memberships": [
+    {
+      "roster_id": "00000000-0000-4000-8000-000000000007",
+      "player_id": "00000000-0000-4000-8000-000000000003",
+      "team_id": "00000000-0000-4000-8000-000000000001",
+      "tournament_id": "00000000-0000-4000-8000-000000000006",
+      "valid_from": "2026-01-01",
+      "jersey_number": "7"
+    }
+  ],
+  "source_mappings": [
+    {
+      "source": "demo",
+      "entity_type": "player",
+      "scope": "",
+      "external_id": "demo-alex",
+      "internal_id": "00000000-0000-4000-8000-000000000003"
+    }
+  ],
+  "team_game_statistics": [
+    {
+      "game_id": "00000000-0000-4000-8000-000000000004",
+      "team_id": "00000000-0000-4000-8000-000000000001",
+      "points": 90
+    },
+    {
+      "game_id": "00000000-0000-4000-8000-000000000004",
+      "team_id": "00000000-0000-4000-8000-000000000002",
+      "points": 85
     }
   ]
 }

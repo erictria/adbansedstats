@@ -4,11 +4,11 @@ Python 3.10+, Pydantic v2, DuckDB or SQLite. Run every command below from
 `repos/ingestion` unless stated otherwise.
 
 **Current boundary:** PBA retrieval automatically fills `records` and
-`ingestion_runs`. Filling `players`, `teams`, `games`, and `game_statistics` with
+`ingestion_runs`. Filling `leagues`, `tournaments`, `players`, `teams`, `games`, and `game_statistics` with
 real data also requires a reviewed normalized JSON file. Automated player/team
 retrieval, identity matching, and staging-to-domain conversion are not implemented.
 Steps 5–6 below describe that manual preparation; there is no one-command live
-import into all six tables yet.
+import into all twelve tables yet.
 
 ## Full ingestion workflow
 
@@ -45,14 +45,15 @@ export INGEST_BACKEND=sqlite
 export INGEST_DATABASE=data/league.sqlite3
 ```
 
-Create all six tables:
+Create all twelve tables:
 
 ```sh
 python ingest.py --init-db --backend "$INGEST_BACKEND" --database "$INGEST_DATABASE"
 ```
 
 Do not use the same file for both engines. Existing SQLite files are not migrated
-to DuckDB. Initialization creates missing tables; it does not migrate changed schemas.
+to DuckDB. Initialization creates missing tables and adds a nullable `games.tournament_id` column
+to older databases. Existing data is preserved; tournament links are not inferred.
 
 ### 3. Discover the published games
 
@@ -141,18 +142,33 @@ PY
 
 ### 6. Prepare the real normalized dataset (manual step)
 
-Create `data/pba-normalized.json` with these four top-level arrays:
+Create `data/pba-normalized.json` with these ten top-level arrays:
 
 ```json
 {
+  "leagues": [],
+  "tournaments": [],
   "players": [],
   "teams": [],
   "games": [],
-  "game_statistics": []
+  "game_statistics": [],
+  "tournament_teams": [],
+  "roster_memberships": [],
+  "source_mappings": [],
+  "team_game_statistics": []
 }
 ```
 
-Populate the arrays as follows. `examples/normalized.json` is a complete **fictional**
+First populate `leagues` and `tournaments`:
+
+- **League:** `league_id` UUID, required `league_name`, optional `abbreviation`,
+  `external_id`, `slug`, and `website_url`. For example, Philippine Basketball Association / PBA.
+- **Tournament:** `tournament_id` UUID, required `league_id` and `tournament_name`,
+  optional `season` (e.g. `"50"`), `external_id`, `slug`, and `source_url`.
+  Create a separate tournament for each season/competition, e.g. Season 50 Governors’ Cup.
+  Do not invent provider identifiers when unavailable; these external IDs are optional.
+
+Populate the remaining arrays as follows. `examples/normalized.json` is a complete **fictional**
 example of the format, not real PBA data to import into your production database.
 
 1. **Teams:** collect the team names and verified source identifiers. Assign one
@@ -167,7 +183,7 @@ example of the format, not real PBA data to import into your production database
    Do not use jersey numbers as permanent player identities or invent external IDs.
    Unresolved players must be resolved before declaring the import complete.
 3. **Games:** assign one internal `game_id` UUID per tournament/provider game ID.
-   Include `team_id_1` and `team_id_2` using the team UUIDs, plus string `external_id`
+   Include `tournament_id` referencing the competition UUID, and `team_id_1` and `team_id_2` using the team UUIDs, plus string `external_id`
    (for example `"522"`), `tournament`, and available metadata. The staging payload
    includes tournament, numeric provider game ID, team code/name, and source URL.
    Competition name, venue, displayed date/time, period, clock, scoreboard, and
@@ -209,7 +225,7 @@ Percentages use 0–100, not fractions. Preserve missing values as JSON `null` r
 than zero. Keep jersey numbers as strings (for example `"00"`). Provider game IDs
 must be mapped to internal UUIDs rather than put directly into foreign-key fields.
 
-### 7. Import all four normalized tables
+### 7. Import all ten normalized tables
 
 After completing the reviewed file:
 
@@ -218,7 +234,7 @@ python ingest.py --normalized data/pba-normalized.json \
   --backend "$INGEST_BACKEND" --database "$INGEST_DATABASE"
 ```
 
-The importer validates all rows, writes players and teams before games and stats,
+The importer validates all rows, writes leagues before tournaments, then players/teams before tournament membership, rosters, games, stats, and source mappings,
 and commits the normalized batch atomically. Any validation or database error rolls
 back the batch. It prints counts for each array; these include updates, not just new
 rows. Normalized imports do not add entries to `ingestion_runs`.
@@ -241,10 +257,10 @@ if os.environ['INGEST_BACKEND'] == 'duckdb':
 else:
     db = sqlite3.connect(os.environ['INGEST_DATABASE'])
 try:
-    for table in ('records', 'ingestion_runs', 'players', 'teams', 'games', 'game_statistics'):
+    for table in ('records', 'ingestion_runs', 'leagues', 'tournaments', 'players', 'teams', 'games', 'game_statistics', 'tournament_teams', 'roster_memberships', 'source_mappings', 'team_game_statistics'):
         print(table, db.execute(f'SELECT count(*) FROM {table}').fetchone()[0])
     payload = json.loads(Path('data/pba-normalized.json').read_text())
-    for table, keys in [('players', ('player_id',)), ('teams', ('team_id',)),
+    for table, keys in [('leagues', ('league_id',)), ('tournaments', ('tournament_id',)), ('players', ('player_id',)), ('teams', ('team_id',)),
                         ('games', ('game_id',)), ('game_statistics', ('game_id', 'player_id'))]:
         assert payload[table], f'{table} input is empty'
         for row in payload[table]:
@@ -269,7 +285,7 @@ so player sums need not equal every team aggregate.
 
 ## Offline smoke run (fictional data)
 
-To exercise all six tables without live retrieval or manual normalization, use a
+To exercise all twelve tables without live retrieval or manual normalization, use a
 separate demo database after step 1:
 
 ```sh
@@ -311,3 +327,100 @@ From the activated environment in `repos/ingestion`:
 python -m unittest discover -s tests -v
 python ingest.py --help
 ```
+
+
+## Leagues, seasons, and upgrading existing databases
+
+Use `from ingestion.schemas import League, Tournament`. Both stores accept
+`write_models(leagues=[...], tournaments=[...], players=[...], teams=[...],
+games=[...], game_statistics=[...])`. All arrays are optional for incremental
+imports, but referenced parent rows must already exist or be included in the batch.
+League membership is recorded on tournaments; games link to tournaments. Players
+and teams retain independent identities across competitions.
+
+For an existing database, run step 2's `--init-db`, then import league/tournament
+records and reimport the complete existing game records with `tournament_id` filled
+in. Reuse every existing UUID and preserve optional values to avoid clearing them.
+The legacy `games.tournament` string remains the provider slug for compatibility;
+`tournament_id` is the normalized relationship. Legacy unlinked games are accepted;
+new game inserts require `tournament_id` and tournament membership for both teams.
+
+The database enforces tournament → league references; the store validates game →
+tournament references inside the write transaction, like game-statistics → game.
+Direct SQL can bypass that check. Live `--pba` staging and `--list-games` still use
+`--tournament` as a provider slug; they do not automatically create league/tournament
+UUIDs or normalize staging records. Other leagues need their own retrieval adapter.
+
+A tournament is one competition in a season; `season` is a label, not a separate
+season table. Tournament membership and dated roster history are now stored separately.
+
+
+## Extended identity and statistics tables
+
+The normalized file also accepts these arrays (see the updated complete
+`examples/normalized.json`). They use the same transactional importer and both backends:
+
+| Array / schema | Fields and identity |
+| --- | --- |
+| `tournament_teams` / `TournamentTeam` | Composite key `tournament_id`, `team_id`; register both teams before adding a game |
+| `roster_memberships` / `RosterMembership` | `roster_id` UUID, `player_id`, `team_id`, `tournament_id`, required `valid_from`, optional `valid_to` and `jersey_number` |
+| `source_mappings` / `SourceMapping` | Composite key `source`, `entity_type`, `scope`, `external_id`; target `internal_id` UUID |
+| `team_game_statistics` / `TeamGameStatistics` | Composite key `game_id`, `team_id`; official team counting and shooting totals |
+
+Roster dates are inclusive; leave `valid_to` null for an open interval. Overlapping
+intervals for the same player within a tournament are rejected. Close a previous
+interval before inserting a transfer/jersey change. Roster intervals support future
+identity resolution; imports do not yet automatically reconcile player-game rows
+against dated rosters or provider aliases.
+
+Mapping entity types are `league`, `tournament`, `team`, `player`, `game`. Use a
+stable provider name in `source`. `scope` defaults to an empty string; supply a
+provider tournament slug when its IDs are not globally unique. Targets must exist.
+A mapping cannot silently change its target; resolve identity corrections explicitly.
+Legacy entity `external_id` fields remain for compatibility; mappings are the place
+for multiple provider identities. Do not infer a provider match from equal numbers.
+
+For every staged `team_game_stats` row, populate `team_game_statistics` using the
+same flattened count/shooting mapping as player stats but without player names,
+jersey numbers, starter flags, minutes_raw, or participation fields. Official team
+totals include Team / Coach contributions and may differ from sums of player rows.
+
+Game status must be `scheduled`, `live`, `final`, `postponed`, `cancelled`, or
+`unknown`. Normalize provider text (e.g. `Final` → `final`) before importing.
+Player `participation_status` must be `played`, `dnp`, `inactive`, or `unknown`.
+Default is unknown; do not infer DNP merely from missing minutes. DNP/inactive rows
+cannot have nonzero stats. Confirm participation before computing games played.
+
+All normalized models accept `source`, `retrieved_at`, and `updated_at`.
+Supply provenance when known; retrieval timestamps require a timezone. The store
+sets `updated_at` in UTC on each write, including repeat imports. Legacy rows keep
+unknown provenance as null rather than fabricated timestamps. These describe the
+latest row, not a full audit history. Existing full-row replacement semantics apply.
+
+The `player_tournament_statistics` view includes only final games and explicitly
+played rows. It provides games played, total points, per-game points/rebounds/assists,
+and a field-goal percentage calculated from summed makes and attempts (not mean
+percentages). Missing shooting values yield a null percentage; zero attempts yield
+null. Per-game averages use available non-null values. Other aggregates can follow
+this same totals-first approach; source-reported percentages remain stored for comparison.
+
+### Upgrade and populate the expanded design
+
+1. Stop other database users, back up your database, and reinstall dependencies
+   with `python -m pip install -e .`.
+2. Run `python ingest.py --init-db --backend "$INGEST_BACKEND" --database "$INGEST_DATABASE"`.
+   This adds missing tables/provenance/participation columns and recreates the
+   aggregate view. It preserves existing data; old participation defaults to unknown.
+3. Add tournament memberships, dated roster records, source mappings, and official
+   team totals to the normalized JSON. Set source/retrieval times where verified.
+4. Normalize game statuses and participation statuses. Link old games to tournaments
+   by reimporting their full rows with the original UUIDs. Legacy unlinked games can
+   still be updated without a tournament; new games cannot be inserted that way.
+5. Rerun step 7, then inspect counts for the four additional arrays/tables. For a full
+   completed-game import, check two team-total rows per game, both tournament-team
+   memberships, and reviewed source mappings. Missing roster/mapping records are
+   not automatically generated by ingestion.
+
+Relationship checks for the four new tables are application-level and transactional.
+Use the store for writes; direct SQL can bypass them. This accommodates DuckDB's
+referenced-row update restrictions. Existing SQL keys still prevent duplicate rows.

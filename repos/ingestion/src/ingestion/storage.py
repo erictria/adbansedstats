@@ -1,3 +1,4 @@
+from .migrations import upgrade
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -6,7 +7,7 @@ from uuid import UUID
 
 from .domain_storage import DomainStore
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .models import IngestedRecord
@@ -42,7 +43,7 @@ class SQLiteConnection:
         for value in params:
             if isinstance(value, UUID):
                 value = str(value)
-            elif isinstance(value, datetime):
+            elif isinstance(value, (date, datetime)):
                 value = value.isoformat()
             elif isinstance(value, list):
                 value = json.dumps(value)
@@ -62,6 +63,10 @@ class SQLiteStore(DomainStore):
         try:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.executescript(files('ingestion').joinpath('sql/sqlite_initial.sql').read_text())
+            columns = {r[1] for r in connection.execute("PRAGMA table_info('games')").fetchall()}
+            if 'tournament_id' not in columns:
+                connection.execute('ALTER TABLE games ADD COLUMN tournament_id TEXT')
+            upgrade(connection, 'sqlite')
             with connection:
                 connection.execute("BEGIN")
                 yield SQLiteConnection(connection)

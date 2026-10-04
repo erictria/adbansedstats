@@ -1,3 +1,4 @@
+from .migrations import upgrade
 """Single-writer DuckDB storage for staging records and validated domain models."""
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -20,6 +21,10 @@ class DuckDBStore(DomainStore):
         connection = duckdb.connect(str(self.path))
         try:
             connection.execute(files('ingestion').joinpath('sql/001_initial.sql').read_text())
+            columns = {r[1] for r in connection.execute("PRAGMA table_info('games')").fetchall()}
+            if 'tournament_id' not in columns:
+                connection.execute('ALTER TABLE games ADD COLUMN tournament_id UUID')
+            upgrade(connection, 'duckdb')
             connection.execute('BEGIN TRANSACTION')
             try:
                 yield connection
@@ -50,4 +55,3 @@ class DuckDBStore(DomainStore):
                      json.dumps({'entity': raw.entity, 'external_id': raw.external_id,
                                  'payload': raw.payload}, allow_nan=False), now, run_id])
         return len(records)
-

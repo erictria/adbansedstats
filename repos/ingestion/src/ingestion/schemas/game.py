@@ -1,5 +1,6 @@
+from .base import DomainModel
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
@@ -7,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 Score = Annotated[int, Field(ge=0, strict=True)]
 
 
-class Game(BaseModel):
+class Game(DomainModel):
     """Game metadata. Team order follows the source, not assumed home/away.
 
     Period scores are ordered Q1 onward, including overtime when present.
@@ -17,6 +18,7 @@ class Game(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     game_id: UUID = Field(default_factory=uuid4)
+    tournament_id: UUID | None = None  # Nullable for existing imports; set for new datasets.
     team_id_1: UUID
     team_id_2: UUID
     external_id: str | None = Field(default=None, min_length=1, examples=["522"])
@@ -25,7 +27,7 @@ class Game(BaseModel):
     venue: str | None = Field(default=None, min_length=1)
     scheduled_at: datetime | None = None
     date_time_raw: str | None = Field(default=None, min_length=1)
-    status: str | None = Field(default=None, min_length=1)
+    status: Literal['scheduled', 'live', 'final', 'postponed', 'cancelled', 'unknown'] = 'unknown'
     period: int | None = Field(default=None, ge=1, strict=True)
     clock: str | None = Field(default=None, pattern=r"^\d+:[0-5]\d$")
     team_1_score: Score | None = None

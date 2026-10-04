@@ -19,7 +19,7 @@ def main() -> int:
     mode.add_argument("--pba", action="store_true", help="Retrieve a PBA game over HTTP")
     mode.add_argument("--list-games", action="store_true", help="List published PBA games as JSON without ingestion")
     mode.add_argument("--init-db", action="store_true", help="Initialize database tables")
-    mode.add_argument("--normalized", type=Path, help="JSON object of players, teams, games, game_statistics")
+    mode.add_argument("--normalized", type=Path, help="Normalized JSON: identity, membership, roster, mapping, game and statistics arrays")
     parser.add_argument("--backend", choices=["duckdb", "sqlite"], default="duckdb")
     parser.add_argument("--tournament", help="PBA tournament slug")
     parser.add_argument("--game-id", type=int, help="PBA game ID")

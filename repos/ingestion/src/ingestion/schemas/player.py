@@ -1,9 +1,10 @@
+from .base import DomainModel
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
-class Player(BaseModel):
+class Player(DomainModel):
     """Player identity; reuse player_id when updating an existing player.
 
     external_id belongs to the provider, not a jersey number. Keep it as text
