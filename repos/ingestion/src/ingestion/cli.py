@@ -20,6 +20,14 @@ def main() -> int:
     mode.add_argument("--list-games", action="store_true", help="List published PBA games as JSON without ingestion")
     mode.add_argument("--init-db", action="store_true", help="Initialize database tables")
     mode.add_argument("--normalized", type=Path, help="Normalized JSON: identity, membership, roster, mapping, game and statistics arrays")
+    mode.add_argument("--match-pba", action="store_true", help="Match saved directory names and jerseys; retain conflicts for review")
+    mode.add_argument("--prepare-pba", action="store_true", help="Cache final games and prepare persistent identity review")
+    mode.add_argument("--import-pba", action="store_true", help="Normalize cached games using reviewed identities and import")
+    parser.add_argument("--work-dir", type=Path, default=Path("data/pba-work"))
+    parser.add_argument("--players-html", type=Path, help="Saved, loaded PBA player directory HTML")
+    parser.add_argument("--teams-html", type=Path, help="Saved PBA teams directory HTML")
+    parser.add_argument("--limit", type=int, help="Limit prepare to first N final games (smoke run)")
+    parser.add_argument("--refresh", action="store_true", help="Refresh cached schedule and game HTML")
     parser.add_argument("--backend", choices=["duckdb", "sqlite"], default="duckdb")
     parser.add_argument("--tournament", help="PBA tournament slug")
     parser.add_argument("--game-id", type=int, help="PBA game ID")
@@ -28,11 +36,20 @@ def main() -> int:
     args = parser.parse_args()
     if args.pba and (not args.tournament or not args.game_id):
         parser.error("--pba requires --tournament and --game-id")
-    if args.list_games and not args.tournament:
-        parser.error("--list-games requires --tournament")
+    if (args.list_games or args.prepare_pba) and not args.tournament:
+        parser.error("--list-games/--prepare-pba requires --tournament")
     database = args.database or Path("data/league.duckdb" if args.backend == "duckdb" else "data/league.sqlite3")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     try:
+        if args.match_pba:
+            from .pba_identity import match_directory
+            print(json.dumps(match_directory(args.work_dir)))
+            return 0
+        if args.prepare_pba:
+            from .pba_workflow import prepare
+            print(json.dumps(prepare(args.tournament, args.work_dir, players_html=args.players_html,
+                teams_html=args.teams_html, limit=args.limit, refresh=args.refresh)))
+            return 0
         if args.list_games:
             print(json.dumps([asdict(game) for game in discover_games(args.tournament)]))
             return 0
@@ -41,6 +58,10 @@ def main() -> int:
             store = DuckDBStore(database)
         else:
             store = SQLiteStore(database)
+        if args.import_pba:
+            from .pba_workflow import ingest
+            print(json.dumps(ingest(args.work_dir, store)))
+            return 0
         if args.init_db:
             store.initialize()
             print(json.dumps({"database": str(database), "initialized": True}))

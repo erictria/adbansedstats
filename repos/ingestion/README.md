@@ -3,12 +3,115 @@
 Python 3.10+, Pydantic v2, DuckDB or SQLite. Run every command below from
 `repos/ingestion` unless stated otherwise.
 
-**Current boundary:** PBA retrieval automatically fills `records` and
-`ingestion_runs`. Filling `leagues`, `tournaments`, `players`, `teams`, `games`, and `game_statistics` with
-real data also requires a reviewed normalized JSON file. Automated player/team
-retrieval, identity matching, and staging-to-domain conversion are not implemented.
-Steps 5–6 below describe that manual preparation; there is no one-command live
-import into all twelve tables yet.
+**Current boundary:** `--prepare-pba` and `--import-pba` now automate cached game
+retrieval, metadata extraction, normalization, and atomic staging/domain imports.
+Player/team directory HTML and confirmed identity mappings are still required.
+The player directory currently blocks direct retrieval from this environment.
+No Alembic restructuring is needed for this workflow.
+
+## Recommended PBA tournament workflow
+
+From `repos/ingestion`, install and activate the environment as in step 1 below.
+
+### Prepare and cache completed games
+
+```sh
+python ingest.py --prepare-pba \
+  --tournament pba-50th-season-governors-cup \
+  --work-dir data/pba-season50
+```
+
+This fetches the schedule and games explicitly marked Final, caches the original
+HTML and structured records, and creates a persistent `identities.json` review file.
+Requests are sequential with a one-second pause. Repeating preparation reuses the
+cache and preserves reviewed identities. Use `--refresh` for a fresh snapshot or
+`--limit 1` for a smoke run; a limited run is not a complete tournament import.
+Completeness means all published Final links, not all historical games. Unmarked
+or scheduled games are deliberately excluded even if their date is in the past.
+
+### Load directory information and review identity matches
+
+Save the loaded pages from `https://www.pba.ph/players` and
+`https://www.pba.ph/teams` as HTML into the work directory. A Cloudflare challenge
+page will not parse. No browser cookies are stored in code or the review file.
+
+```sh
+python ingest.py --prepare-pba \
+  --tournament pba-50th-season-governors-cup \
+  --work-dir data/pba-season50 \
+  --players-html data/pba-season50/players.html \
+  --teams-html data/pba-season50/teams.html
+```
+
+The directory parsers extract names, provider IDs from image paths, photos/logos,
+team profile links, and commented player profile slugs. They populate the `players`
+and `teams` catalogs, keyed by string provider ID, with UUIDs assigned once. These
+image-path IDs are provider-specific candidates: confirm them during review.
+Short names derived from the first initial are editable suggestions.
+
+Match unambiguous directory entries before manual review:
+
+```sh
+python ingest.py --match-pba --work-dir data/pba-season50
+```
+
+This matches exact normalized team names and unique abbreviated-player-name plus
+jersey combinations. Evidence is written to `identity-match-evidence.json`.
+Existing matches are preserved. Jersey mismatches remain unresolved; matching a
+current directory does not establish historical roster intervals. Duplicate cards
+with identical full name/profile slug can use the single numeric photo-path ID.
+Where a numeric ID is absent, the catalog uses `slug:<profile-slug>` as a clearly
+namespaced source identifier, not an invented numeric person ID.
+
+Edit `data/pba-season50/identities.json`:
+
+- Set each `team_matches` value from null to a verified team catalog key, e.g.
+  `"GIN": "4"` when supported by your roster/team evidence.
+- Set each `player_matches` value from null to a verified player catalog key.
+  Keys contain `[team code, jersey number, exact box-score name]`; they identify
+  observations, not permanent players. Different observations can map to one player.
+- Verify full names, short names, provider IDs, and UUIDs in the catalogs. You can
+  supply the catalogs manually using the Player/Team schema fields if saved HTML is
+  unavailable. Do not invent provider IDs or match on jersey number alone.
+- If an observation could refer to more than one person over the selected games,
+  do not approve it; the current match format needs a more specific scope first.
+- The import creates one assumed roster membership for each player seen in a game.
+  Its `valid_from` is the earliest imported game date and `valid_to` is empty;
+  `source` is `pba-assumed` to distinguish this from verified roster history.
+  A player's actual signing date may differ. Add a manual membership for a player
+  in `roster_memberships` to override the assumption. Players appearing for more
+  than one team require manual dated memberships before import.
+- When importing into a populated database, use its existing UUIDs. New work folders
+  assign new UUIDs; conflicting source mappings are rejected, not silently merged.
+
+Keep and back up this file. It contains the reviewed identity work needed for
+repeatable imports. Directory refreshes never overwrite existing catalog entries;
+apply corrections explicitly. `data/` is ignored by Git.
+
+### Normalize and import into either database
+
+```sh
+python ingest.py --import-pba --work-dir data/pba-season50 \
+  --backend duckdb --database data/league.duckdb
+```
+
+For SQLite, use `--backend sqlite --database data/league.sqlite3`.
+Unconfirmed mappings generate `unresolved.json` and stop before any database writes.
+Successful normalization writes a reviewable `normalized.json` and imports the
+selected games in one transaction, including staging rows/run metadata. A failure
+rolls back both staging and normalized writes. Reimports reuse saved UUIDs and update
+existing records; no game/player IDs are generated from names or jersey numbers.
+
+The workflow fills leagues, tournaments, players, teams, tournament membership,
+games, player game stats, official team game stats, source mappings, staging records,
+and ingestion runs. Reviewed roster memberships are imported when supplied.
+Game metadata includes venue, competition name, raw displayed date, period, clock,
+scoreboard and quarter scores; dates remain unparsed until format/timezone is
+confirmed. It cross-checks team totals against the scoreboard. Minutes above zero
+mean played, explicit DNP means dnp, and zero/unknown minutes remain unknown.
+
+Run all tests with `python -m unittest discover -s tests -v`. The manual workflow
+below remains available for other sources and for preparing normalized input by hand.
 
 ## Full ingestion workflow
 
@@ -369,7 +472,9 @@ The normalized file also accepts these arrays (see the updated complete
 
 Roster dates are inclusive; leave `valid_to` null for an open interval. Overlapping
 intervals for the same player within a tournament are rejected. Close a previous
-interval before inserting a transfer/jersey change. Roster intervals support future
+interval before inserting a transfer/jersey change. The PBA workflow starts assumed
+memberships on the first imported game date; this date is a proxy for season start.
+Roster intervals support future
 identity resolution; imports do not yet automatically reconcile player-game rows
 against dated rosters or provider aliases.
 

@@ -1,8 +1,9 @@
 # Adbansed Stats UI
 
-Vite and TypeScript frontend with strict type checking.
+Vite and TypeScript frontend for the ingested basketball statistics. Requires
+Node.js 22.12 or newer.
 
-Requires Node.js 22.12 or newer. If you use nvm, run `nvm use` in this directory.
+First, start the [Banse API](../banse/README.md) on port 8000. Then:
 
 ```sh
 cd repos/ui
@@ -10,23 +11,19 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite.
+Open the local URL printed by Vite. The development server forwards `/api`
+requests to Banse at `http://127.0.0.1:8000`. For a separate production API host,
+set `VITE_API_BASE_URL` to its origin when building. That host must allow browser
+requests from the UI origin.
 
-- `npm run typecheck` checks TypeScript without producing files.
-- `npm run build` checks TypeScript and builds the site into `dist/`.
-- `npm run preview` serves the production build locally after building.
+- `#/` shows the selected tournament, scoring leaders, recent results, and teams.
+- `#/stats` shows tournament player averages with search, team filter, and sorting.
+- `#/players/<uuid>` shows a player profile and game log.
+- `#/teams/<uuid>` shows a team profile, roster, and results.
+- `#/games/<uuid>` shows a game's player box score.
 
-The page starts in `src/main.ts`, with styles in `src/style.css`.
+The tournament selector uses the API's tournament list. Only imported final games
+are represented. Team roster memberships for the current import have assumed start
+dates, as documented in `repos/ingestion/README.md`.
 
-## Pages
-
-- `#/` — Home with league overview, scoring leaders, and team links.
-- `#/players/alex-reyes` — Player profile with season averages and team link.
-- `#/teams/harbor` — Team profile with record and linked roster.
-- `#/stats` — Player stat table with name search, team filter, and sorting.
-
-Each page lives in `src/pages/`. Hash routing supports direct links, refreshes,
-back/forward navigation, and static hosting without server rewrite rules.
-Unknown routes and profile IDs show a not-found page.
-
-`src/data.ts` contains fictional basketball fixtures; no live data is connected yet.
+Use `npm run typecheck` and `npm run build` to validate the frontend.

@@ -1,21 +1,20 @@
-export interface Team { id: string; name: string; city: string; wins: number; losses: number }
-export interface Player { id: string; name: string; teamId: string; number: number; position: string; games: number; points: number; rebounds: number; assists: number }
-// Fictional fixtures. Replace with datasource results when the API is available.
-export const teams: Team[] = [
-  { id: 'harbor', name: 'Harbor Waves', city: 'Harbor City', wins: 12, losses: 4 },
-  { id: 'metro', name: 'Metro Falcons', city: 'Metro City', wins: 10, losses: 6 },
-  { id: 'summit', name: 'Summit Bears', city: 'Summit City', wins: 8, losses: 8 },
-]
-export const players: Player[] = [
-  { id: 'alex-reyes', name: 'Alex Reyes', teamId: 'harbor', number: 7, position: 'Guard', games: 16, points: 24.8, rebounds: 4.2, assists: 7.1 },
-  { id: 'jordan-cruz', name: 'Jordan Cruz', teamId: 'metro', number: 12, position: 'Forward', games: 16, points: 22.3, rebounds: 8.6, assists: 3.4 },
-  { id: 'sam-rivera', name: 'Sam Rivera', teamId: 'summit', number: 21, position: 'Center', games: 15, points: 18.6, rebounds: 11.2, assists: 2.1 },
-  { id: 'nico-santos', name: 'Nico Santos', teamId: 'harbor', number: 3, position: 'Forward', games: 16, points: 17.4, rebounds: 6.8, assists: 2.9 },
-  { id: 'eli-ramos', name: 'Eli Ramos', teamId: 'metro', number: 5, position: 'Guard', games: 14, points: 16.2, rebounds: 3.1, assists: 6.5 },
-  { id: 'kai-torres', name: 'Kai Torres', teamId: 'summit', number: 9, position: 'Guard', games: 16, points: 15.9, rebounds: 4.5, assists: 5.8 },
-]
-export function teamFor(player: Player): Team {
-  const team = teams.find(team => team.id === player.teamId)
-  if (!team) throw new Error('Unknown team')
-  return team
+export interface Tournament { tournament_id: string; tournament_name: string; league_name: string; season: string | null; games?: number }
+export interface Player { player_id: string; player_name: string; photo_url: string | null; team_id: string; team_name: string; jersey_number: string | null; games: number; points_total: number; rebounds_total: number; assists_total: number; threes_total: number; fours_total: number }
+export interface Team { team_id: string; team_name: string; logo_url: string | null; games: number; wins: number; losses: number; points_for: number; points_against: number; roster_count: number }
+export interface Game { game_id: string; date_time_raw: string | null; venue: string | null; team_id_1: string; team_1_name: string; team_1_score: number | null; team_id_2: string; team_2_name: string; team_2_score: number | null }
+export interface BoxScore { player_id: string; player_name: string; team_id: string; jersey_number: string | null; participation_status: string; minutes_raw: string | null; points: number | null; rebounds: number | null; assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null; field_goals_made: number | null; field_goals_attempted: number | null; three_pointers_made: number | null; three_pointers_attempted: number | null; four_pointers_made: number | null; four_pointers_attempted: number | null; plus_minus: number | null }
+export interface GameDetail extends Game { box_score: BoxScore[] }
+export interface PlayerGame { game_id: string; date_time_raw: string | null; opponent_id: string; opponent_name: string; minutes_raw: string | null; points: number | null; rebounds: number | null; assists: number | null; three_pointers_made: number | null; four_pointers_made: number | null; plus_minus: number | null }
+export interface PlayerDetail extends Player { games_log: PlayerGame[] }
+export interface TeamDetail extends Team { roster: Player[]; games_log: Game[] }
+export interface Overview { tournament: Tournament; players: Player[]; teams: Team[]; games: Game[] }
+
+const base = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+export async function api<T>(path: string): Promise<T> {
+  const response = await fetch(`${base}/api${path}`)
+  if (!response.ok) throw new Error(response.status === 404 ? 'Record not found.' : `Banse returned ${response.status}. Check that the API is running.`)
+  return response.json() as Promise<T>
 }
+export const scoped = (path: string, tournamentId: string): string => `${path}?tournament_id=${encodeURIComponent(tournamentId)}`
+export const average = (total: number, games: number): string => games ? (total / games).toFixed(1) : '—'
+export const escapeHtml = (value: string | number | null | undefined): string => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!)

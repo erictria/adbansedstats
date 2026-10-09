@@ -15,7 +15,11 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid 
 nav { display: flex; gap: 1.7rem; align-items: center; }
 nav a { padding: 1.9rem 0; color: #5e6878; font-size: .875rem; font-weight: 600; border-bottom: 3px solid transparent; }
 nav a[aria-current] { color: #233e65; border-bottom-color: #99494f; }
-.demo-notice { text-align: center; padding: .65rem 1rem; background: #eeeff2; color: #606a79; font-size: .75rem; letter-spacing: .025em; }
+.data-notice { text-align: center; padding: .65rem 1rem; background: #eeeff2; color: #606a79; font-size: .75rem; letter-spacing: .025em; }
+.tournament-picker { display: flex; flex-direction: column; gap: .25rem; font-size: .68rem; font-weight: 700; color: #606a79; }
+.tournament-picker select { max-width: 260px; padding: .45rem .65rem; font-size: .8rem; }
+button.button { border: 0; cursor: pointer; font: inherit; }
+.loading { padding: 3rem 0; }
 main { max-width: 1200px; margin: auto; padding: 2.5rem 2rem 4rem; min-height: calc(100vh - 200px); }
 main:focus { outline: none; }
 h1, h2, h3, p { margin-top: 0; }
@@ -52,6 +56,7 @@ tbody tr:hover { background: #f8f9fb; }
 .team-card { display: block; border: 1px solid #dfe3e9; border-radius: 12px; background: white; padding: 1.5rem; color: #202d43; }
 .team-card:hover { border-color: #8396b1; text-decoration: none; }
 .badge { color: #99494f; display: inline-flex; padding: .65rem; border-radius: 8px; background: #f3e8e8; font-weight: 800; font-size: .8rem; margin-bottom: 1.5rem; }
+.badge img { width: 42px; height: 42px; object-fit: contain; }
 .team-card p { font-size: .8rem; }
 .team-record { display: flex; justify-content: space-between; border-top: 1px solid #e4e7ec; padding-top: 1rem; margin-top: 1.5rem; font-weight: 750; }
 .team-record span { font-size: .75rem; color: #99494f; font-weight: 500; }
@@ -60,6 +65,7 @@ tbody tr:hover { background: #f8f9fb; }
 .profile-heading h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: .6rem; }
 .profile-heading p:last-child { margin: 0; }
 .profile-badge { width: 110px; height: 110px; flex-shrink: 0; border-radius: 20px; display: grid; place-items: center; font-size: 2.2rem; font-weight: 800; background: #233e65; color: #dfc47e; }
+.profile-badge img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 2rem 0; }
 .metrics div { padding: 0 1.5rem; border-right: 1px solid #e0e4eb; display: flex; flex-direction: column-reverse; gap: .5rem; }
 .metrics div:last-child { border: 0; }

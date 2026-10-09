@@ -1,10 +1,8 @@
-import { players, teamFor } from '../data'
-import { metrics, notFound } from '../components'
-export function playerPage(id: string): string {
-  const p = players.find(p => p.id === id)
-  if (!p) return notFound('Player')
-  const team = teamFor(p)
-  return `<a class="back-link" href="#/stats">← Player stats</a><section class="profile-heading"><div class="profile-badge">${p.number}</div><div><p class="eyebrow">Player profile</p><h1>${p.name}</h1><p>${p.position} · #${p.number} · <a href="#/teams/${team.id}">${team.name}</a></p></div></section>
-  <section class="panel"><div class="section-heading"><div><p class="eyebrow">Demo season · Regular season</p><h2>Season averages</h2></div></div>${metrics([['Points / game',p.points.toFixed(1)],['Rebounds / game',p.rebounds.toFixed(1)],['Assists / game',p.assists.toFixed(1)],['Games played',p.games]])}</section>
-  <section class="panel detail-panel"><h2>Player details</h2><dl class="details"><div><dt>Team</dt><dd><a href="#/teams/${team.id}">${team.name}</a></dd></div><div><dt>Position</dt><dd>${p.position}</dd></div><div><dt>Jersey number</dt><dd>${p.number}</dd></div></dl></section>`
+import { average, escapeHtml as e, type PlayerDetail, type Tournament } from '../data'
+import { metrics } from '../components'
+
+export function playerPage(p: PlayerDetail, tournament: Tournament): string {
+  return `<a class="back-link" href="#/stats">← Player stats</a><section class="profile-heading"><div class="profile-badge">${p.photo_url ? `<img src="${e(p.photo_url)}" alt="" loading="lazy">` : e(p.jersey_number || '—')}</div><div><p class="eyebrow">Player profile</p><h1>${e(p.player_name)}</h1><p>#${e(p.jersey_number || '—')} · <a href="#/teams/${e(p.team_id)}">${e(p.team_name)}</a></p></div></section>
+  <section class="panel"><div class="section-heading"><div><p class="eyebrow">${e(tournament.tournament_name)}</p><h2>Per-game averages</h2></div></div>${metrics([['Points',average(p.points_total,p.games)],['Rebounds',average(p.rebounds_total,p.games)],['Assists',average(p.assists_total,p.games)],['Games played',p.games]])}</section>
+  <section class="panel"><div class="section-heading"><div><p class="eyebrow">Box scores</p><h2>Game log</h2></div></div><div class="table-scroll"><table><thead><tr>${['Date','Opponent','MIN','PTS','REB','AST','3PM','4PM','+/−'].map(x=>`<th scope="col">${x}</th>`).join('')}</tr></thead><tbody>${p.games_log.map(g=>`<tr><td><a href="#/games/${e(g.game_id)}">${e(g.date_time_raw || '—')}</a></td><td><a href="#/teams/${e(g.opponent_id)}">${e(g.opponent_name)}</a></td><td>${e(g.minutes_raw || '—')}</td><td>${e(g.points ?? '—')}</td><td>${e(g.rebounds ?? '—')}</td><td>${e(g.assists ?? '—')}</td><td>${e(g.three_pointers_made ?? '—')}</td><td>${e(g.four_pointers_made ?? '—')}</td><td>${e(g.plus_minus ?? '—')}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">No games yet.</td></tr>'}</tbody></table></div></section>`
 }
