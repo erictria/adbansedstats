@@ -25,51 +25,65 @@ the UI never opens DuckDB directly. During local development, Vite forwards brow
 requests for `/api` to Banse at `http://127.0.0.1:8000`. Banse currently serves
 DuckDB, although ingestion can also write SQLite. The data directory is local and
 ignored by Git, so a fresh clone needs an ingestion run or a copy of the database.
+The optional [private ingestion API](repos/ingestion/README.md#private-ingestion-api)
+can start those CLI operations on loopback; it is not part of the public UI path.
 
-## Run the current data locally
+## Run locally with Make
 
-The database is already populated on this machine. Run these commands from the
-project root in **two separate terminals**.
+From the project root, you need `make`, `npm`, and Python 3.10 or newer. The
+Makefile defaults to `python3.14`; check that it is available with
+`python3.14 --version`. If you use another supported interpreter, pass it to
+setup, for example `make setup PYTHON=python3.12`.
 
-### 1. Start Banse
+The API also needs the populated DuckDB file at
+`repos/ingestion/data/league.duckdb`. The `data` directory is ignored by Git,
+so a fresh clone needs a copy of the existing database or an
+[ingestion run](repos/ingestion/README.md) first. `make setup` installs code
+dependencies; it does not create or populate the database.
 
-Use Python 3.10 or newer. This machine has Homebrew Python 3.14; the default
-`python3` may instead be Anaconda Python 3.9, which cannot install Banse.
+1. Install the API and UI dependencies once:
+
+   ```sh
+   make setup
+   ```
+
+2. Start Banse and Vite together:
+
+   ```sh
+   make dev
+   ```
+
+3. Open the UI at <http://127.0.0.1:5173>. Check the API at
+   <http://127.0.0.1:8000/api/tournaments>; its interactive docs are at
+   <http://127.0.0.1:8000/docs>.
+
+Press **Ctrl-C** in the `make dev` terminal to stop both services. For later
+sessions, run only `make dev`. If either service exits, the launcher stops the
+other one too.
+
+`make setup` creates Banse's virtual environment and installs the UI's
+project-local Node 22 dependency. The launcher uses that Node binary even if
+the system's `node --version` reports 16.16.0. If an existing Banse virtual
+environment was created with Python 3.9, recreate it with a supported Python
+version before running `make setup` again, for example:
 
 ```sh
-cd repos/banse
-python3.14 --version
-python3.14 -m venv .venv          # first time only
-source .venv/bin/activate
-python --version                 # should show 3.14.x
-python -m pip install -e .      # first time, or after dependency changes
-banse --database ../ingestion/data/league.duckdb
+python3.14 -m venv --clear repos/banse/.venv
+make setup
 ```
 
-If `.venv` was previously made with Python 3.9, run
-`python3.14 -m venv --clear .venv` in `repos/banse` before activating it. A pip
-upgrade warning is unrelated to the Python version error. Keep this terminal
-running. Check the API at <http://127.0.0.1:8000/api/tournaments> or explore
-its interactive docs at <http://127.0.0.1:8000/docs>.
+Docker is not needed for local development here: the running pieces are one
+FastAPI process, one Vite process, and a local DuckDB file. The launcher handles
+their startup and shutdown without containers. Docker could be useful later for
+deployment or a shared environment across machines, but would add image builds
+and database volume configuration to this setup.
 
-### 2. Start the UI
-
-Vite needs Node.js 22.12 or newer. The default `/usr/local/bin/node` on this
-machine is version 16.16.0. A temporary Node 22 binary is available from the
-previous setup, so the following works while that `/tmp` directory exists:
-
-```sh
-export PATH="/tmp/banse-node/node_modules/node/bin:$PATH"
-node --version                    # should show v22.23.3
-cd repos/ui
-npm install                       # first time, or after dependency changes
-npm run dev
-```
-
-Open the local address printed by Vite, usually <http://localhost:5173>.
-For a lasting setup, install Node 22.12+ with your preferred version manager and
-ensure `node --version` reports it before running `npm run dev`; the `/tmp` copy
-can disappear after a restart.
+For a production VM, follow the [deployment runbook](docs/DEPLOYMENT.md). It
+covers HTTPS, service management, DuckDB updates, scheduled retrieval, backups,
+and recovery. The [future proxy plan](docs/PROXY_PLAN.md) describes when and how
+to introduce `repos/proxy` if the API later needs a separate application gateway.
+The [automated ingestion plan](docs/AUTOMATED_INGESTION_PLAN.md) covers a staged
+path from scheduled retrieval to guarded, repeatable imports.
 
 ## Update the data
 

@@ -3,12 +3,15 @@
 Vite and TypeScript frontend for the ingested basketball statistics. Requires
 Node.js 22.12 or newer.
 
-First, start the [Banse API](../banse/README.md) on port 8000. Then:
+From the project root, `make setup` installs both services and `make dev` starts
+them together. The UI uses a project-local Node 22 binary, so an older system
+Node does not affect the launcher. To start only the UI for debugging, first
+start the [Banse API](../banse/README.md) on port 8000, then:
 
 ```sh
 cd repos/ui
 npm install
-npm run dev
+./node_modules/node/bin/node ./node_modules/vite/bin/vite.js
 ```
 
 Open the local URL printed by Vite. The development server forwards `/api`

@@ -9,6 +9,66 @@ Player/team directory HTML and confirmed identity mappings are still required.
 The player directory currently blocks direct retrieval from this environment.
 No Alembic restructuring is needed for this workflow.
 
+## Private ingestion API
+
+The same CLI operations can be started through a FastAPI control service. From
+the project root, install it once and run it in a separate terminal:
+
+```sh
+make setup-ingestion-api
+export INGESTION_API_TOKEN='replace-with-a-long-random-secret'
+make ingestion-api
+```
+
+The service listens only on `127.0.0.1:8001`; it is intentionally separate from
+`make dev` and should not be routed through Caddy or exposed publicly. Every
+`/ingestion` endpoint requires `Authorization: Bearer <token>`. The process fails
+to start if `INGESTION_API_TOKEN` is empty. The configured work root and database
+are fixed at startup; request bodies accept only simple work-directory names and
+JSON filenames within that root, not arbitrary filesystem paths or shell commands.
+The OpenAPI page is at <http://127.0.0.1:8001/docs> on the machine running it.
+
+| POST path | Existing CLI operation |
+| --- | --- |
+| `/ingestion/list-games` | `--list-games` |
+| `/ingestion/prepare-pba` | `--prepare-pba` |
+| `/ingestion/match-pba` | `--match-pba` |
+| `/ingestion/import-pba` | `--import-pba` |
+| `/ingestion/init-db` | `--init-db` |
+| `/ingestion/pba-game` | `--pba` for one game |
+| `/ingestion/normalized` | `--normalized` for a saved JSON file |
+| `/ingestion/fixture` | `--input` for a saved JSON fixture |
+
+Each POST returns HTTP 202 with a job ID. Poll `GET /ingestion/jobs/{job_id}`
+for `running`, `succeeded`, or `failed`; the result or error is included. Only
+one API job runs at a time; another submission returns HTTP 409. Job history is
+in memory and disappears when the API process restarts. The CLI remains available
+for durable scheduled runs. Do not run a CLI job and an API job against the same
+work directory or database at the same time.
+
+For example, with the token exported in the calling terminal:
+
+```sh
+curl -sS http://127.0.0.1:8001/ingestion/prepare-pba \
+  -H "Authorization: Bearer $INGESTION_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"tournament":"pba-50th-season-governors-cup","work_dir":"pba-season50","refresh":true}'
+```
+
+Use the returned `job_id` to check completion:
+
+```sh
+curl -sS http://127.0.0.1:8001/ingestion/jobs/JOB_ID \
+  -H "Authorization: Bearer $INGESTION_API_TOKEN"
+```
+
+`prepare-pba` can use previously saved `players.html` and `teams.html` by setting
+`"use_saved_directories":true`. Review `identities.json` and the match evidence
+before calling `import-pba`. The API does **not** approve identities or coordinate
+Banse shutdown. Stop Banse before a DuckDB-writing endpoint if Banse has the file
+open, take a backup, then restart Banse and verify its API afterward. The
+[deployment runbook](../../docs/DEPLOYMENT.md) has the import and recovery steps.
+
 ## Recommended PBA tournament workflow
 
 From `repos/ingestion`, install and activate the environment as in step 1 below.

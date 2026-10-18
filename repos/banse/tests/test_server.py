@@ -86,6 +86,16 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.json(), {'status': 'ok'})
         self.assertEqual(response.headers['access-control-allow-origin'], 'http://localhost:5173')
 
+    def test_openapi_exposes_typed_requests_and_responses(self):
+        paths = self.client.get('/openapi.json').json()['paths']
+        players = paths['/api/players']['get']
+        scope = [parameter for parameter in players['parameters']
+                 if parameter['name'] == 'tournament_id']
+        self.assertEqual(len(scope), 1)
+        self.assertEqual(scope[0]['schema']['format'], 'uuid')
+        self.assertIn('Player', str(players['responses']['200']))
+        self.assertIn('GameDetail', str(paths['/api/games/{game_id}']['get']['responses']['200']))
+
 
 if __name__ == '__main__':
     unittest.main()

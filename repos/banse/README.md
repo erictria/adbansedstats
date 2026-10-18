@@ -1,6 +1,13 @@
 # Banse data API
 
 Read-only FastAPI service for the DuckDB database populated by `repos/ingestion`.
+`src/banse/server.py` configures the app and CLI; HTTP routes and their shared
+dependencies live in `src/banse/endpoints/`, while DuckDB queries live in
+`src/banse/service/data.py`. Typed request and response contracts live in
+`src/banse/models/` and are published in FastAPI's OpenAPI schema.
+For normal local development, run `make setup` once and `make dev` from the
+project root to start Banse and the UI together. The steps below start Banse
+alone for debugging.
 Requires Python 3.10+. Check the interpreter version before creating the virtual
 environment; on this Mac, Homebrew provides `python3.14`. The API opens a read-only database connection for each request,
 so stop the API before an ingestion run if DuckDB reports a file lock.
